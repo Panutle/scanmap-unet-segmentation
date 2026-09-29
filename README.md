@@ -9,6 +9,15 @@ An end-to-end Computer Vision and Deep Learning framework designed for semantic 
 
 ---
 
+## 📌 Demonstration & Visual Output
+
+<div align="center">
+  <img src="docs/demo_segmentation_io.jpg" alt="DeepScanMap U-Net Input vs Output Mask" width="850px" />
+  <p><em>Figure: Side-by-side comparison between the raw scanned vintage map input and the extracted binary contour/boundary segmentation mask produced by the custom Deep U-Net pipeline.</em></p>
+</div>
+
+---
+
 ## 📌 Architectural Overview
 
 ```mermaid
@@ -77,10 +86,12 @@ $$\mathcal{L}_{\text{Dice}} = 1 - \frac{2 \sum (y_{\text{true}} \cdot y_{\text{p
 
 ```text
 scanmap-unet-segmentation/
+├── docs/
+│   └── demo_segmentation_io.jpg  # Input vs Output segmentation preview
 ├── src/
-│   ├── train_unet.py        # 6-channel data preprocessing, U-Net training, and MLOps loops
-│   └── inference_patch.py   # Patch extraction, batched prediction, and full-image reconstruction
-├── requirements.txt         # Project dependencies
+│   ├── train_unet.py             # 6-channel data preprocessing, U-Net training, and MLOps loops
+│   └── inference_patch.py        # Patch extraction, batched prediction, and full-image reconstruction
+├── requirements.txt              # Project dependencies
 └── README.md
 ```
 
