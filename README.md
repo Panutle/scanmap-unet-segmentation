@@ -1,117 +1,80 @@
-# DeepScanMap: High-Resolution Map Feature Segmentation via Custom Deep U-Net
+# Scanned Map Segmentation with U-Net
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg?style=flat-square&logo=python)](https://python.org)
-[![TensorFlow / Keras](https://img.shields.io/badge/Deep%20Learning-TensorFlow%20%2F%20Keras-orange?style=flat-square&logo=tensorflow)](https://tensorflow.org)
-[![OpenCV](https://img.shields.io/badge/Computer%20Vision-OpenCV-green?style=flat-square&logo=opencv)](https://opencv.org)
-[![Status](https://img.shields.io/badge/Status-Completed-success?style=flat-square)]()
+A computer-vision experiment for extracting map features from scanned documents. The repository contains a six-channel RGB/HSV U-Net training script and a separate patch-based inference experiment.
 
-An end-to-end Computer Vision and Deep Learning framework designed for semantic segmentation of ultra-high-resolution scanned cartographic documents and maps. The system handles large-scale gigapixel raster imagery through a sliding-window patch decomposition and reconstruction pipeline, training a deeply parameterized U-Net architecture powered by multi-spectral feature expansion (RGB + HSV) and hybrid loss optimization.
+![Map input and segmentation output](docs/demo_segmentation_io.jpg)
 
----
+## What the code demonstrates
 
-## 📌 Demonstration & Visual Output
+- RGB/HSV feature preparation and paired image-mask training data.
+- An encoder-decoder network with skip connections, batch normalization, and regularization.
+- Binary cross-entropy and Dice-based loss functions, checkpointing, and training plots.
+- Patch prediction and weighted reconstruction for large images.
 
-<div align="center">
-  <img src="docs/demo_segmentation_io.jpg" alt="DeepScanMap U-Net Input vs Output Mask" width="850px" />
-  <p><em>Figure: Side-by-side comparison between the raw scanned vintage map input and the extracted binary contour/boundary segmentation mask produced by the custom Deep U-Net pipeline.</em></p>
-</div>
+## Repository guide
 
----
+| File | Purpose |
+| --- | --- |
+| [train_unet.py](src/train_unet.py) | Data preparation, U-Net definition, training, and evaluation |
+| [inference_patch.py](src/inference_patch.py) | Three-channel, 64×64 patch inference and reconstruction experiment |
+| [requirements.txt](requirements.txt) | Dependency lower bounds; not a frozen training environment |
 
-## 📌 Architectural Overview
+## Setup and reproduction
 
-```mermaid
-flowchart TD
-    subgraph DataPrep["1. Feature Space & Preprocessing"]
-        A[Raw Scanned Map Image] --> B[Histogram Equalization on V-channel]
-        B --> C[Dynamic Saturation Rescaling]
-        C --> D[6-Channel Feature Fusion: RGB + HSV]
-        D --> E[Sliding Window Patching: 512x512 / 64x64]
-    end
+Training images, masks, and trained models are not included. The scripts retain machine-specific paths and require adaptation before execution.
 
-    subgraph UNetArchitecture["2. Deep U-Net Architecture"]
-        E --> F[Contracting Path: Conv2D 9x9 + BatchNorm + L2]
-        F --> G[Bottleneck: 512 Filters]
-        G --> H[Expansive Path: Conv2DTranspose + Skip Connections]
-        H --> I[Output Layer: 1x1 Conv Sigmoid Mask]
-    end
+### Install dependencies
 
-    subgraph Optimization["3. Loss & MLOps Pipeline"]
-        I --> J[Hybrid Loss: Binary Cross-Entropy + Dice Loss]
-        J --> K[Multiprocessing Isolation & K.clear_session]
-        K --> L[Real-Time Webhook Telemetry via ntfy.sh]
-    end
+Run these commands from a terminal with Python available:
 
-    subgraph InferenceReconstruction["4. Large-Scale Inference"]
-        M[Full-Size Scanned Map: 7013x5100] --> N[Patch Extraction: 64x64 Grid]
-        N --> O[Batch U-Net Inference]
-        O --> P[Weighted Map Normalization & Stitching]
-        P --> Q[Final Reconstructed Segmentation Mask]
-    end
-```
-
----
-
-## ⚙️ Core Technical Highlights
-
-### 1. 6-Channel Chromatic Feature Space (RGB + HSV Fusion)
-To isolate map features (lines, symbols, terrain boundaries) from aging paper and uneven scanning illumination:
-* **Adaptive Contrast Enhancement:** Implements histogram equalization specifically on the Value ($V$) channel, followed by dynamic Saturation ($S$) scaling restricted within $[0.8, 2.0]$.
-* **Multi-Modal Color Fusion:** Combines normalized RGB $[0, 1]$ and normalized HSV $[0, 1]$ into a unified 6-channel tensor $(512 \times 512 \times 6)$, providing both structural color balance and lighting-invariant chromatic representations.
-
-### 2. Deep U-Net Architecture with Receptive Field Expansion
-* **Large Kernel Convolutions ($9 \times 9$):** Replaces standard $3 \times 3$ filters with wider $9 \times 9$ receptive fields across encoder/decoder blocks $(64 \rightarrow 128 \rightarrow 256 \rightarrow 512)$, capturing extended map line continuity and contextual geometries.
-* **Regularization & Stability:** Integrates `BatchNormalization` after each convolution block and enforces $L_2$ kernel regularization ($10^{-4}$) with `HeNormal` weight initialization to prevent gradient vanishing and overfitting.
-* **Skip Connections:** Long skip connections bridge high-resolution spatial boundaries from the encoder directly to the decoder path (`Conv2DTranspose`), preserving fine-grained border details.
-
-### 3. Hybrid Optimization: Dice Loss + Binary Cross-Entropy
-To address severe class imbalance where target map markings occupy a tiny fraction of the total raster area:
-
-$$\mathcal{L}_{\text{Total}} = \mathcal{L}_{\text{BCE}} + \mathcal{L}_{\text{Dice}}$$
-
-$$\mathcal{L}_{\text{Dice}} = 1 - \frac{2 \sum (y_{\text{true}} \cdot y_{\text{pred}}) + 1}{\sum y_{\text{true}} + \sum y_{\text{pred}} + 1}$$
-
-### 4. Enterprise Memory Management & Multi-Processing Isolation
-* **Hardware Stability:** Enables `set_memory_growth` for GPU acceleration on modern hardware (Apple Silicon / NVIDIA).
-* **Process Isolation:** Runs incremental training cycles (`n_train_step = 1000`) and intermediate evaluation inside discrete `multiprocessing.Process` workers, followed by explicit `K.clear_session()` and `gc.collect()`, eradicating long-running TensorFlow memory leaks.
-* **Automated MLOps Telemetry:** Dispatches real-time training notifications (model parameters, validation accuracy, duration) to mobile devices via webhook alerts (`ntfy.sh`).
-
-### 5. Seamless Gigapixel Patch Reconstruction
-* Processes ultra-large raster inputs (e.g., $7013 \times 5100$ pixels) that exceed standard GPU VRAM capacities.
-* Deconstructs input images into a regular $64 \times 64$ patch matrix, executes batched U-Net inference, and stitches outputs using a normalized weighting accumulator map to eliminate border stitching artifacts.
-
----
-
-## 📂 Repository Structure
-
-```text
-scanmap-unet-segmentation/
-├── docs/
-│   └── demo_segmentation_io.jpg  # Input vs Output segmentation preview
-├── src/
-│   ├── train_unet.py             # 6-channel data preprocessing, U-Net training, and MLOps loops
-│   └── inference_patch.py        # Patch extraction, batched prediction, and full-image reconstruction
-├── requirements.txt              # Project dependencies
-└── README.md
-```
-
----
-
-## 🚀 Getting Started
-
-### 1. Installation
 ```bash
 git clone https://github.com/Panutle/scanmap-unet-segmentation.git
 cd scanmap-unet-segmentation
-pip install -r requirements.txt
+python -m venv .venv
 ```
 
-### 2. Model Training
+Activate the environment using the command for your shell:
+
+| Shell | Command |
+| --- | --- |
+| Windows PowerShell | `.\.venv\Scripts\Activate.ps1` |
+| macOS / Linux | `source .venv/bin/activate` |
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+The inference script also imports Pandas, which is absent from `requirements.txt`:
+
+```bash
+python -m pip install pandas
+```
+
+### Training
+
+1. Update the `Variable` path helpers in `src/train_unet.py` for your paired input and mask directories and output locations. The loader expects matching image and mask filenames.
+2. Prepare 512×512 image/mask pairs for the default training configuration, and create the required output directories.
+3. Review `epochs`, `n_train_step`, `n_train_data`, and `batch` before running; the stored values target long experiments.
+4. Replace or disable the training notification endpoint for your environment.
+
 ```bash
 python src/train_unet.py
 ```
 
-### 3. Full Map Inference & Mask Reconstruction
+### Inference compatibility
+
+The checked-in inference script uses **64×64 RGB inputs**, while training defaults to **512×512, six-channel inputs**. A model produced with the default training configuration cannot be assumed to work with this inference script. Supply a compatible model or first align the input shape, feature preprocessing, output channels, and custom loss loading.
+
+Update the input image, model, temporary patch directory, prediction directory, and hard-coded `img_shape` in `src/inference_patch.py`. The extraction and reconstruction loops use different edge conditions; align their patch counts and decide how to pad or crop boundary pixels before running on a new image size.
+
+After those adaptations, the entry point is:
+
 ```bash
 python src/inference_patch.py
-```#
+```
+
+The final image is written as `Final_con.bmp` in the working directory.
+
+## Evaluation scope
+
+The preview illustrates a segmentation result. A held-out dataset, aggregate segmentation scores, runtime benchmark, and trained checkpoint are not bundled. The example image dimensions are in the tens of megapixels; the repository does not establish gigapixel processing performance. TensorFlow/Keras compatibility and memory requirements must be validated for the chosen environment.
